@@ -120,7 +120,7 @@ Cormorant Garamond (display), Inter (body/UI). Always use the Type component var
 
 Done since the old checklist: App Store Connect app record; TestFlight internal group; build pipeline (GitHub Actions instead of EAS for now).
 
-In progress: run #1 of "iOS -> TestFlight" (first real compile, signing and upload). Watch for signing/capability errors (Sign in with Apple, Push, App Attest) on the first run.
+Build pipeline proven: run #1 of "iOS -> TestFlight" succeeded on 2026-10-09 (21 min). Archive, signing (incl. the Sign in with Apple, Push and App Attest capabilities) and upload all passed; the first build, NOIR 1.0 (1), was uploaded to App Store Connect and reaches the owner's iPhone and iPad through the "My Devices" TestFlight group once Apple processes it.
 
 Owner actions still open (keep `SETUP-REQUIRED.md` in this order, updated for the GitHub Actions/TestFlight path):
 
