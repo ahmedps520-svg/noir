@@ -1,0 +1,22 @@
+The previous Expo config listed several React Native Firebase packages as config plugins
+even though not every module provides a config plugin. That could make `expo config`
+fail during EAS configuration.
+
+This version keeps only the plugins needed for native configuration:
+- expo-router
+- @react-native-firebase/app
+- @react-native-firebase/auth
+- @react-native-firebase/app-check/app.plugin.js
+- @react-native-google-signin/google-signin
+- expo-apple-authentication
+- expo-build-properties
+
+The Android google-services file is not referenced yet because the Android Firebase app
+file has not been provided. The iOS GoogleService-Info.plist is included.
+
+After extraction:
+1. npm install
+2. npx expo config --json
+3. eas build:configure
+
+If step 2 prints an error, stop and send the complete error.

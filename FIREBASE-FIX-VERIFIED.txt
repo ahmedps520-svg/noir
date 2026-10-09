@@ -1,0 +1,20 @@
+NOIR v17 Firebase/runtime fix
+
+Changes:
+- Removed the misleading Web-SDK configuration gate from the account screen.
+- Authentication and Firestore profile writes now use React Native Firebase consistently.
+- Native AI continues to use React Native Firebase AI Logic.
+- App Check is only initialized on native iOS/Android, avoiding native-module startup errors in web/Expo Go.
+- Web Firebase configuration remains in firebase/config.ts for the Firebase Web App.
+- Google Sign-In and Apple Sign-In remain enabled.
+- Anonymous sign-in is not included.
+- EAS/iOS configuration and GoogleService-Info.plist are retained.
+- Expo SDK 54 compatibility versions reported by Expo are aligned in package.json.
+
+Testing order after extraction:
+1. npm install
+2. npx expo config --json
+3. npx tsc --noEmit
+4. npx expo start -c
+
+The native AI/App Check path still requires an iOS development build for a real device.

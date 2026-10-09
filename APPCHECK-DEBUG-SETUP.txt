@@ -1,0 +1,12 @@
+NOIR v16 App Check debug setup
+
+1. Firebase Console -> App Check -> Apps -> NOIR -> Manage debug tokens.
+2. Do not create a random token here for the interactive iOS device flow.
+3. Launch the NOIR iOS development build.
+4. Look in the development logs for:
+   FIREBASE APP CHECK DEBUG TOKEN: <token>
+5. Register that token in Manage debug tokens.
+6. Restart NOIR and test the AI preview.
+
+Do not send the token to anyone or commit it to a public repository.
+Production builds use App Attest with DeviceCheck fallback instead.

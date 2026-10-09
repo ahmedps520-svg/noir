@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "NOIR",
+    "slug": "noir",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "noir",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.noir.cosmos",
+      "requireFullScreen": false,
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.noir.cosmos"
+    },
+    "plugins": [
+      "expo-router",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      "@react-native-firebase/app-check/app.plugin.js",
+      "@react-native-google-signin/google-signin",
+      "expo-apple-authentication",
+      "expo-iap",
+      "expo-notifications",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ],
+      "expo-font"
+    ],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "icon": "./assets/icon.png",
+    "splash": {
+      "backgroundColor": "#050505",
+      "image": "./assets/noir-splash.png",
+      "resizeMode": "contain"
+    },
+    "newArchEnabled": true
+  }
+}

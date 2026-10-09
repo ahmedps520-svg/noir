@@ -1,0 +1,14 @@
+NOIR v10 — clean Expo configuration
+
+1. Open Command Prompt in this project.
+2. Run:
+   npm install
+3. Then verify:
+   npx expo config --json
+4. If that succeeds, run:
+   eas build:configure
+
+GoogleService-Info.plist is already included in the project root.
+Do not delete it.
+
+If `npx expo config --json` fails, copy the full error text before running anything else.

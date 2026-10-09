@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// NOIR Firestore rules.
+//
+// Deploy with:  firebase deploy --only firestore:rules
+//
+// The user document at users/{uid} holds onboarding answers, birth information,
+// the generated readings and the NOIR+ entitlement cache. It must be readable
+// and writable only by its owner — without these rules the project's default
+// test-mode rules expire and every read starts failing.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // Anonymous accounts are not part of NOIR, so require a real provider.
+      allow create, update: if request.auth != null
+                            && request.auth.uid == uid
+                            && request.auth.token.firebase.sign_in_provider != 'anonymous';
+
+      // Only the owner can delete — this is the in-app account deletion Apple
+      // requires (Guideline 5.1.1(v)). See services/deleteAccount.ts.
+      allow delete: if request.auth != null && request.auth.uid == uid;
+
+      // Daily readings and the reflections written against them, one document
+      // per local date (YYYY-MM-DD). Same owner-only rule as the parent.
+      match /dailyReadings/{date} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow create, update: if request.auth != null
+                              && request.auth.uid == uid
+                              && request.auth.token.firebase.sign_in_provider != 'anonymous';
+        // Cleared explicitly during account deletion: Firestore does not remove
+        // subcollections when their parent document is deleted.
+        allow delete: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
