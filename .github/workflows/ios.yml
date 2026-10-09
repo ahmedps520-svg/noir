@@ -1,0 +1,186 @@
+# Build NOIR on a Mac and upload it to TestFlight.
+#
+# Run it by hand: Actions → "iOS -> TestFlight" → Run workflow. It generates the
+# native iOS project with `expo prebuild` (there is no ios/ folder in the repo),
+# installs the pods, archives the Release build with automatic signing through
+# an App Store Connect API key, and uploads it to App Store Connect. Each run's
+# build number is the run number, so every upload is unique.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   ASC_KEY_ID      the API key's Key ID
+#   ASC_ISSUER_ID   the Issuer ID shown above the keys list
+#   ASC_KEY_P8      the whole text of the downloaded AuthKey_XXXX.p8 file
+#   APPLE_TEAM_ID   the 10-character Team ID (developer.apple.com → Membership)
+#
+# Capabilities come from the entitlements prebuild writes (Sign in with Apple,
+# Push Notifications, App Attest); automatic signing enables them on the
+# com.noir.cosmos App ID and makes the profiles.
+name: iOS -> TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version shown on the App Store (e.g. 1.0, 1.1)'
+        required: true
+        default: '1.0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      VERSION: ${{ inputs.version }}
+      BUILD: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the secrets are set
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=0
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 APPLE_TEAM_ID; do
+            if [ -z "${!v}" ]; then echo "::error::Repository secret $v is not set"; missing=1; fi
+          done
+          [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]] || { echo "::error::version must look like 1.0 or 1.0.1"; missing=1; }
+          exit $missing
+
+      - name: API key (cleaned and checked)
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # Secrets pasted on Windows carry \r and stray spaces; trim the IDs and
+          # check their shape, then rebuild the .p8 as a clean PEM and check it
+          # with openssl (.github/scripts/asc-key.sh).
+          clean() { printf '%s' "$1" | tr -d ' \t\r\n"'"'"; }
+          KEY_ID="$(clean "$ASC_KEY_ID")"; ISSUER_ID="$(clean "$ASC_ISSUER_ID")"; TEAM_ID="$(clean "$APPLE_TEAM_ID")"
+          bad=0
+          [[ "$KEY_ID" =~ ^[A-Z0-9]{10}$ ]] || { echo "::error title=ASC_KEY_ID::should be the 10-character Key ID (letters and digits), e.g. 2X9R4HXF34"; bad=1; }
+          [[ "$ISSUER_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || { echo "::error title=ASC_ISSUER_ID::should be the Issuer ID shown above the keys list, like 57246542-96fe-1a63-e053-0824d011072a"; bad=1; }
+          [[ "$TEAM_ID" =~ ^[A-Z0-9]{10}$ ]] || { echo "::error title=APPLE_TEAM_ID::should be the 10-character Team ID from developer.apple.com → Membership"; bad=1; }
+          [ $bad = 0 ] || exit 1
+          echo "::add-mask::$KEY_ID"; echo "::add-mask::$ISSUER_ID"; echo "::add-mask::$TEAM_ID"
+          mkdir -p "$RUNNER_TEMP/keys"
+          KEY_PATH="$RUNNER_TEMP/keys/AuthKey_${KEY_ID}.p8"
+          bash .github/scripts/asc-key.sh "$KEY_PATH"
+          {
+            echo "KEY_ID=$KEY_ID"
+            echo "ISSUER_ID=$ISSUER_ID"
+            echo "TEAM_ID=$TEAM_ID"
+            echo "KEY_PATH=$KEY_PATH"
+          } >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Pick the newest Xcode
+        run: |
+          # Newest release Xcode on the runner; App Store Connect rejects builds
+          # made with a beta.
+          xcode="$(printf '%s\n' /Applications/Xcode_*.app | grep -vi beta | sed 's/\.app$//' | sort -V | tail -1)"
+          [ -n "$xcode" ] || { echo "::error::no Xcode found in /Applications"; exit 1; }
+          sudo xcode-select -s "$xcode.app"
+          xcodebuild -version
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Generate the iOS project
+        run: |
+          npx expo prebuild --platform ios --clean --no-install
+          # Prebuild writes literal version numbers into Info.plist; point them at
+          # the build settings so MARKETING_VERSION / CURRENT_PROJECT_VERSION below
+          # end up in the app.
+          plist=ios/NOIR/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString \$(MARKETING_VERSION)" "$plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion \$(CURRENT_PROJECT_VERSION)" "$plist"
+          echo "Entitlements:"; cat ios/NOIR/NOIR.entitlements
+
+      - name: Install pods
+        working-directory: ios
+        run: pod install
+
+      - name: Archive
+        run: |
+          set +e
+          xcodebuild archive \
+            -workspace ios/NOIR.xcworkspace \
+            -scheme NOIR \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/NOIR.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD" \
+            > "$RUNNER_TEMP/archive.log" 2>&1
+          status=$?
+          set -e
+          if [ $status -ne 0 ] || [ ! -d "$RUNNER_TEMP/NOIR.xcarchive" ]; then
+            echo "::group::Errors"
+            grep -E '(error|fatal error):|requires a provisioning profile|No profiles for|Provisioning profile' "$RUNNER_TEMP/archive.log" | sort -u | head -n 60 || true
+            echo "::endgroup::"
+            tail -n 80 "$RUNNER_TEMP/archive.log"
+            echo "::error::archive failed — errors above, full log in the archive-log artifact"
+            exit 1
+          fi
+          tail -n 20 "$RUNNER_TEMP/archive.log"
+
+      - name: Sign and upload to App Store Connect
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/NOIR.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+          echo "### Uploaded NOIR $VERSION ($BUILD) to App Store Connect" >> "$GITHUB_STEP_SUMMARY"
+          echo "It shows in TestFlight once Apple has processed it, usually 10–30 minutes." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the archive log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: archive-log
+          path: ${{ runner.temp }}/archive.log
+          if-no-files-found: ignore
+
+      - name: Remove the key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"

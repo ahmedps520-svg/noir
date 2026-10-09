@@ -12,6 +12,9 @@
       "requireFullScreen": false,
       "googleServicesFile": "./GoogleService-Info.plist",
       "usesAppleSignIn": true,
+      "entitlements": {
+        "com.apple.developer.devicecheck.appattest-environment": "production"
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -32,7 +35,13 @@
         "expo-build-properties",
         {
           "ios": {
-            "useFrameworks": "static"
+            "useFrameworks": "static",
+            "forceStaticLinking": [
+              "RNFBApp",
+              "RNFBAuth",
+              "RNFBAppCheck",
+              "RNFBFirestore"
+            ]
           }
         }
       ],
