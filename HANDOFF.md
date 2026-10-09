@@ -122,14 +122,29 @@ Done since the old checklist: App Store Connect app record; TestFlight internal 
 
 Build pipeline proven: run #1 of "iOS -> TestFlight" succeeded on 2026-10-09 (21 min). Archive, signing (incl. the Sign in with Apple, Push and App Attest capabilities) and upload all passed; the first build, NOIR 1.0 (1), was uploaded to App Store Connect and reaches the owner's iPhone and iPad through the "My Devices" TestFlight group once Apple processes it.
 
+First device test of 1.0 (1), 2026-10-09 (iPhone, iOS 27.0) — three problems, each part code and part console:
+
+- Continue with Apple → "That sign-in method isn't enabled for NOIR yet" (`auth/operation-not-allowed`): the Apple provider isn't enabled in Firebase Authentication (console step A2). Code bug found behind it: the Apple credential was given Apple's authorization code where React Native Firebase expects the raw nonce, so Apple sign-in would still have failed once enabled. Fixed in `services/auth.ts` (sign-in and re-auth): Apple now gets the SHA-256 of a random nonce and Firebase gets the raw nonce. New dependency `expo-crypto` ~15.0.9 (added with `npx expo install`). The authorization code is still used only for token revocation on deletion.
+- Google's account picker said "continue to project-…" instead of NOIR: the Firebase public-facing name (= the OAuth consent screen app name) was never set; it defaults to "project-<project number>". Console only (step A3), no code change.
+- Readings failed with `[401] Firebase App Check token is invalid` (AI/fetch-error): code bug — `services/nativeFirebase.ts` initialized App Check but never passed the instance to `getAI`, so AI requests carried no App Check token at all, and App Check enforcement for Firebase AI Logic is already on. Fixed by passing `appCheck` to `getAI`. App Attest must also be registered for the iOS app in App Check (step A1), or tokens still can't be issued.
+- Checked and fine: run #1's log shows the signed app carries `aps-environment`, Sign in with Apple and App Attest (`production`) entitlements; `firebase/appCheck.ts` uses App Attest with DeviceCheck fallback in release and debug only in `__DEV__`.
+- Both code fixes need a new build (1.0 (2) or later). Validated with tsc, `expo config`, `expo install --check` and a prebuild + pod install dry run; not yet verified on a device.
+
+Console fix-up steps from that test (owner, in order):
+
+- A1. Apple Developer → Keys → new key with DeviceCheck and Sign in with Apple (primary App ID com.noir.cosmos) → download the .p8 once, note the Key ID. Firebase → App Check → Apps → NOIR (iOS) → App Attest: Team ID → Save; DeviceCheck: that key + Key ID + Team ID → Save. App Check → APIs → Firebase AI Logic → Unenforce until verified requests show on a device (item 3 below).
+- A2. Firebase → Authentication → Sign-in method → Add new provider → Apple → Enable; the OAuth code flow fields (Team ID, Key ID, .p8 from A1) cover item 6 below → Save.
+- A3. Firebase → Project settings → General → Public-facing name → "NOIR" → Save. (No logo on the Google consent screen — a logo triggers Google brand verification.)
+- A4. Run "iOS -> TestFlight" (version 1.0) → build 1.0 (2); test Apple sign-in, the Google picker name and a reading; then App Check → APIs → Firebase AI Logic → Enforce once its metrics show verified requests.
+
 Owner actions still open (keep `SETUP-REQUIRED.md` in this order, updated for the GitHub Actions/TestFlight path):
 
 1. Sign the Paid Applications Agreement + banking/tax (otherwise StoreKit returns no products).
 2. Create both subscriptions in one group; 3-day free-trial Introductory Offer on monthly.
-3. Firebase Console → App Check: make sure the NOIR iOS app has the App Attest provider (and DeviceCheck for the fallback) registered. TestFlight builds are release builds, so they use App Attest and need no debug token (the debug-token step only applies to dev-client builds). Keep enforcement off until readings are confirmed on a device.
+3. Firebase Console → App Check: make sure the NOIR iOS app has the App Attest provider (and DeviceCheck for the fallback) registered. TestFlight builds are release builds, so they use App Attest and need no debug token (the debug-token step only applies to dev-client builds). Keep enforcement off until readings are confirmed on a device. (Found enforced on 2026-10-09 — see A1.)
 4. Fill in the hosting placeholders → `firebase deploy --only hosting,firestore:rules` → add the Privacy Policy and Support URLs in App Store Connect → fill in the App Privacy label (email, user content, birth details, user ID; linked to user; app functionality only; no tracking).
 5. Test a real purchase on the TestFlight build (TestFlight uses the sandbox automatically with the tester's normal Apple ID; a separate sandbox tester is only needed for dev builds).
-6. Add the Sign in with Apple key (.p8, Key ID, Team ID) to the Firebase Apple provider so token revocation works on deletion.
+6. Add the Sign in with Apple key (.p8, Key ID, Team ID) to the Firebase Apple provider so token revocation works on deletion. (See A1–A2.)
 7. Confirm the Gemini plan/data terms (section 7).
 
 Real AI reading quality hasn't been reviewed on a device yet; the first TestFlight run should judge it.

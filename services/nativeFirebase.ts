@@ -31,15 +31,18 @@ export type NoirModelOptions = {
  * Build a Gemini model handle through Firebase AI Logic.
  *
  * App Check is initialized first on purpose: Firebase AI Logic rejects requests
- * from clients that cannot present a valid App Check token.
+ * from clients that cannot present a valid App Check token. The instance must
+ * also be handed to getAI — without it no App Check token is attached to
+ * AI requests at all.
  */
 export async function getNoirModel(options: NoirModelOptions = {}) {
   assertNativeRuntime();
-  await initializeNoirAppCheck();
+  const appCheck = await initializeNoirAppCheck();
 
   const ai = getAI(firebaseApp, {
     backend: new GoogleAIBackend(),
     auth: firebaseAuth,
+    appCheck,
   });
 
   return getGenerativeModel(ai, {

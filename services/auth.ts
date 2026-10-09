@@ -1,6 +1,7 @@
 import auth, { FirebaseAuthTypes } from "@react-native-firebase/auth";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as AppleAuthentication from "expo-apple-authentication";
+import * as Crypto from "expo-crypto";
 import { GOOGLE_WEB_CLIENT_ID } from "../constants/config";
 
 export type NoirSignInResult = {
@@ -46,23 +47,34 @@ export async function signInWithGoogle(): Promise<NoirSignInResult> {
   return toResult(userCredential, result.data?.user?.name ?? null);
 }
 
+/**
+ * Firebase accepts an Apple identity token only if its nonce is the SHA-256 of
+ * the raw nonce on the credential, so Apple gets the hash and Firebase the
+ * original. (The credential's second argument is that raw nonce — not Apple's
+ * authorization code, which is only used for token revocation.)
+ */
+async function appleNonce() {
+  const raw = Crypto.randomUUID();
+  const hashed = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, raw);
+  return { raw, hashed };
+}
+
 export async function signInWithApple(): Promise<NoirSignInResult> {
   const available = await AppleAuthentication.isAvailableAsync();
   if (!available) throw new Error("Apple Sign-In is not available on this device.");
 
+  const nonce = await appleNonce();
   const response = await AppleAuthentication.signInAsync({
     requestedScopes: [
       AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
       AppleAuthentication.AppleAuthenticationScope.EMAIL,
     ],
+    nonce: nonce.hashed,
   });
 
   if (!response.identityToken) throw new Error("Apple did not return an identity token.");
 
-  const credential = auth.AppleAuthProvider.credential(
-    response.identityToken,
-    response.authorizationCode || undefined,
-  );
+  const credential = auth.AppleAuthProvider.credential(response.identityToken, nonce.raw);
 
   const userCredential = await auth().signInWithCredential(credential);
 
@@ -185,15 +197,14 @@ export async function reauthenticateWithApple(): Promise<string | null> {
   const available = await AppleAuthentication.isAvailableAsync();
   if (!available) throw new Error("Apple Sign-In is not available on this device.");
 
+  const nonce = await appleNonce();
   const response = await AppleAuthentication.signInAsync({
     requestedScopes: [AppleAuthentication.AppleAuthenticationScope.EMAIL],
+    nonce: nonce.hashed,
   });
   if (!response.identityToken) throw new Error("Apple did not return an identity token.");
 
-  const credential = auth.AppleAuthProvider.credential(
-    response.identityToken,
-    response.authorizationCode || undefined,
-  );
+  const credential = auth.AppleAuthProvider.credential(response.identityToken, nonce.raw);
   await user.reauthenticateWithCredential(credential);
   return response.authorizationCode ?? null;
 }
