@@ -33,7 +33,10 @@ export type NoirModelOptions = {
  * App Check is initialized first on purpose: Firebase AI Logic rejects requests
  * from clients that cannot present a valid App Check token. The instance must
  * also be handed to getAI — without it no App Check token is attached to
- * AI requests at all.
+ * AI requests at all. Limited-use tokens are required because replay
+ * protection is on for Firebase AI Logic (even in monitor-only mode): only
+ * limited-use tokens count as verified there, and with regular session tokens
+ * Firebase deactivates AI Logic for the project (403).
  */
 export async function getNoirModel(options: NoirModelOptions = {}) {
   assertNativeRuntime();
@@ -43,6 +46,7 @@ export async function getNoirModel(options: NoirModelOptions = {}) {
     backend: new GoogleAIBackend(),
     auth: firebaseAuth,
     appCheck,
+    useLimitedUseAppCheckTokens: true,
   });
 
   return getGenerativeModel(ai, {

@@ -137,6 +137,8 @@ Console fix-up steps from that test (owner, in order):
 - A3. Firebase → Project settings → General → Public-facing name → "NOIR" → Save. (No logo on the Google consent screen — a logo triggers Google brand verification.)
 - A4. Run "iOS -> TestFlight" (version 1.0) → build 1.0 (2); test Apple sign-in, the Google picker name and a reading; then App Check → APIs → Firebase AI Logic → Enforce once its metrics show verified requests.
 
+Build 1.0 (2), tested 2026-10-10 (iPhone, iOS 27.0), after steps A1–A3 were done: Apple sign-in works. Readings failed with `[403] Firebase AI Logic has been deactivated in this project. To resume using Firebase AI Logic, you must enforce Firebase App Check.` App Check state at the time (owner set, leave as is): Firebase AI Logic Basic = Enforced, Replay protection = Monitoring; chart 0% verified / 100% unverified. Per firebase.google.com/docs/ai-logic/error-codes, with replay protection on (even monitor-only) only limited-use tokens count as verified for AI Logic. Fix: `services/nativeFirebase.ts` now passes `useLimitedUseAppCheckTokens: true` to `getAI` (React Native Firebase forwards limited-use requests to the App Attest provider). Validated with tsc and `expo config`; ships in build 1.0 (3). Not yet verified on a device. The same docs page says the project's AI Logic activity is reassessed daily, so the 403 may take up to a day to clear after verified requests start.
+
 Owner actions still open (keep `SETUP-REQUIRED.md` in this order, updated for the GitHub Actions/TestFlight path):
 
 1. Sign the Paid Applications Agreement + banking/tax (otherwise StoreKit returns no products).
