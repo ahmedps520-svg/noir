@@ -134,7 +134,7 @@ export default function Paywall() {
         <Reveal>
           <View style={styles.head}>
             <Label tone="plus">NOIR+</Label>
-            <Pressable onPress={() => router.back()} hitSlop={12} style={styles.close} accessibilityRole="button">
+            <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/preview"))} hitSlop={12} style={styles.close} accessibilityRole="button">
               <Micro tone="muted">Not now</Micro>
             </Pressable>
           </View>
